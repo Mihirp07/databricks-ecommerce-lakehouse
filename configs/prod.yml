@@ -1,0 +1,97 @@
+# =============================================================================
+# Environment: PRODUCTION
+# Cloud Target: AWS S3 + Databricks on AWS
+# =============================================================================
+# DEPLOYMENT NOTES:
+#   1. Attach an IAM Instance Profile to the Databricks cluster with
+#      s3:GetObject, s3:PutObject, s3:DeleteObject on the bucket.
+#   2. Store all secret values in a Databricks Secret Scope backed by
+#      AWS Secrets Manager.
+#   3. Set simulate_cloud_paths: false — real s3:// URIs will be used.
+#   4. Enable Unity Catalog and set catalog_name to your UC catalog.
+# =============================================================================
+
+environment: prod
+cloud_provider: aws
+simulate_cloud_paths: false      # REAL S3 paths in production
+
+storage:
+  cloud:
+    bucket: s3://ecommerce-lakehouse-prod
+    bronze_prefix: /bronze
+    silver_prefix: /silver
+    gold_prefix:   /gold
+    checkpoint_prefix: /checkpoints
+    raw_prefix:    /raw
+
+  dbfs_root: dbfs:/FileStore/lakehouse   # unused in prod (simulate_cloud_paths=false)
+  local_root: /tmp/lakehouse
+
+paths:
+  raw:        "s3://ecommerce-lakehouse-prod/raw"
+  bronze:     "s3://ecommerce-lakehouse-prod/bronze"
+  silver:     "s3://ecommerce-lakehouse-prod/silver"
+  gold:       "s3://ecommerce-lakehouse-prod/gold"
+  checkpoint: "s3://ecommerce-lakehouse-prod/checkpoints"
+  archive:    "s3://ecommerce-lakehouse-prod/archive"
+
+# Azure equivalent (swap in for Azure deployment):
+# paths:
+#   raw:        "abfss://raw@ecommercedatalake.dfs.core.windows.net/"
+#   bronze:     "abfss://bronze@ecommercedatalake.dfs.core.windows.net/"
+#   silver:     "abfss://silver@ecommercedatalake.dfs.core.windows.net/"
+#   gold:       "abfss://gold@ecommercedatalake.dfs.core.windows.net/"
+#   checkpoint: "abfss://checkpoints@ecommercedatalake.dfs.core.windows.net/"
+
+delta:
+  retention_hours: 168
+  optimize_write: true
+  auto_compact: true
+  target_file_size_mb: 128
+  z_order_columns:
+    orders:    ["customer_id", "order_date"]
+    events:    ["session_id", "event_timestamp"]
+    customers: ["customer_id"]
+    products:  ["product_id", "category"]
+
+spark:
+  shuffle_partitions: 200        # production cluster — full parallelism
+  broadcast_threshold_mb: 100
+  adaptive_enabled: true
+  delta_cache_enabled: true
+  log_level: WARN
+
+streaming:
+  trigger_interval: "10 seconds"
+  max_files_per_trigger: 10000
+  schema_hints_enabled: true
+  cloud_files_format: json
+
+data_quality:
+  orders:
+    null_tolerance_pct: 0.01
+    duplicate_tolerance_pct: 0.0
+    min_order_amount: 0.01
+    max_order_amount: 50000.0
+  events:
+    null_tolerance_pct: 0.05
+    duplicate_tolerance_pct: 0.02
+  customers:
+    null_tolerance_pct: 0.001
+    duplicate_tolerance_pct: 0.0
+
+catalog:
+  unity_catalog: true
+  catalog_name: ecommerce_prod
+  bronze_db: bronze
+  silver_db: silver
+  gold_db:   gold
+
+secrets:
+  scope: ecommerce-prod
+  keys:
+    db_host:       postgres_host
+    db_user:       postgres_user
+    db_password:   postgres_password
+    kafka_brokers: kafka_brokers
+    kafka_api_key: kafka_api_key

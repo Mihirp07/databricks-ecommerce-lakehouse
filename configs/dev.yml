@@ -1,0 +1,112 @@
+# =============================================================================
+# Environment: DEVELOPMENT
+# Cloud Target: AWS S3 (simulated via DBFS for local/free execution)
+# =============================================================================
+# HOW CLOUD SIMULATION WORKS:
+#   In dev  → all s3:// paths are remapped to dbfs:/FileStore/lakehouse/
+#   In prod → s3:// paths are used directly with IAM role / instance profile
+#   The application code NEVER hardcodes paths — it reads from this config.
+# =============================================================================
+
+environment: dev
+cloud_provider: aws          # options: aws | azure | gcp | local
+simulate_cloud_paths: true   # set false in real cloud deployment
+
+# ---------------------------------------------------------------------------
+# Cloud Storage — S3 (production target)
+# In dev these are rewritten to dbfs_root by spark_utils.resolve_path()
+# ---------------------------------------------------------------------------
+storage:
+  cloud:
+    bucket: s3://ecommerce-lakehouse-prod
+    bronze_prefix: /bronze
+    silver_prefix: /silver
+    gold_prefix:   /gold
+    checkpoint_prefix: /checkpoints
+    raw_prefix:    /raw
+
+  # Local simulation root (DBFS or relative path for open-source Spark)
+  dbfs_root: dbfs:/FileStore/lakehouse
+  local_root: /tmp/lakehouse          # fallback for unit tests (no Databricks)
+
+# Fully-resolved layer paths (used by resolve_path() util)
+# These mirror what the s3:// paths would look like in production
+paths:
+  raw:        "s3://ecommerce-lakehouse-prod/raw"
+  bronze:     "s3://ecommerce-lakehouse-prod/bronze"
+  silver:     "s3://ecommerce-lakehouse-prod/silver"
+  gold:       "s3://ecommerce-lakehouse-prod/gold"
+  checkpoint: "s3://ecommerce-lakehouse-prod/checkpoints"
+  archive:    "s3://ecommerce-lakehouse-prod/archive"
+
+# ---------------------------------------------------------------------------
+# Delta Lake settings
+# ---------------------------------------------------------------------------
+delta:
+  retention_hours: 168          # 7 days
+  optimize_write: true
+  auto_compact: true
+  target_file_size_mb: 128
+  z_order_columns:
+    orders:    ["customer_id", "order_date"]
+    events:    ["session_id", "event_timestamp"]
+    customers: ["customer_id"]
+    products:  ["product_id", "category"]
+
+# ---------------------------------------------------------------------------
+# Spark tuning
+# ---------------------------------------------------------------------------
+spark:
+  shuffle_partitions: 8          # keep low for dev; set 200+ in prod
+  broadcast_threshold_mb: 20
+  adaptive_enabled: true
+  delta_cache_enabled: true
+  log_level: WARN
+
+# ---------------------------------------------------------------------------
+# Streaming (Auto Loader)
+# ---------------------------------------------------------------------------
+streaming:
+  trigger_interval: "30 seconds"
+  max_files_per_trigger: 1000
+  schema_hints_enabled: true
+  cloud_files_format: json       # json | csv | parquet | avro
+
+# ---------------------------------------------------------------------------
+# Data Quality thresholds
+# ---------------------------------------------------------------------------
+data_quality:
+  orders:
+    null_tolerance_pct: 0.01     # max 1% nulls on critical columns
+    duplicate_tolerance_pct: 0.0
+    min_order_amount: 0.01
+    max_order_amount: 50000.0
+  events:
+    null_tolerance_pct: 0.05
+    duplicate_tolerance_pct: 0.02
+  customers:
+    null_tolerance_pct: 0.001
+    duplicate_tolerance_pct: 0.0
+
+# ---------------------------------------------------------------------------
+# Databricks catalog / database names
+# ---------------------------------------------------------------------------
+catalog:
+  unity_catalog: false           # set true when Unity Catalog is enabled
+  catalog_name: hive_metastore   # replace with 'ecommerce_prod' in UC
+  bronze_db: bronze
+  silver_db: silver
+  gold_db:   gold
+
+# ---------------------------------------------------------------------------
+# Secrets (referenced by name — never hardcode values)
+# In production: stored in Databricks Secret Scope or AWS Secrets Manager
+# ---------------------------------------------------------------------------
+secrets:
+  scope: ecommerce-dev            # dbutils.secrets.get(scope, key)
+  keys:
+    db_host:       postgres_host
+    db_user:       postgres_user
+    db_password:   postgres_password
+    kafka_brokers: kafka_brokers
+    kafka_api_key: kafka_api_key

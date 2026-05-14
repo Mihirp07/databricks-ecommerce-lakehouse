@@ -1,0 +1,28 @@
+# Generated data
+/tmp/
+*.csv
+*.json
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.eggs/
+.pytest_cache/
+
+# Spark / Delta
+derby.log
+metastore_db/
+spark-warehouse/
+
+# Environment files
+.env
+*.env
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
