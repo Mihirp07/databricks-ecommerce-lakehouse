@@ -103,7 +103,7 @@ databricks-ecommerce-lakehouse/
 │   │   └── gold_revenue_summary.py ← Daily/monthly KPIs + channel breakdown
 │   └── quality/
 │       └── expectations.py       ← DQ expectation framework
-├── notebooks/                    ← Databricks notebooks for each layer
+├── notebooks/                    ← Databricks notebooks (coming soon)
 ├── jobs/
 │   └── full_pipeline_job.yml     ← Databricks Workflows job definition
 ├── tests/
@@ -111,7 +111,6 @@ databricks-ecommerce-lakehouse/
 ├── scripts/
 │   └── generate_sample_data.py   ← Synthetic data generator (600K+ rows)
 └── docs/
-    ├── architecture_diagram.png
     └── data_dictionary.md
 ```
 
@@ -169,8 +168,8 @@ pytest tests/ -v
 
 1. Upload the repo to Databricks Repos
 2. Set `ENV_NAME=dev` as a cluster environment variable
-3. Open `notebooks/00_setup_environment.ipynb` and follow setup steps
-4. Run notebooks in order: `01` → `02` → `03` → `04`
+3. Run `scripts/generate_sample_data.py` to populate the raw landing zone
+4. Run each pipeline module in order: Bronze → Silver → Gold (see step 3 above)
 5. To deploy as a scheduled job: import `jobs/full_pipeline_job.yml` via the Workflows UI
 
 ---
