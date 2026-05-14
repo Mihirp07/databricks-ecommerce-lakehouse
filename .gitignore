@@ -1,28 +1,91 @@
-# Generated data
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+.eggs/
+
+# =============================================================================
+# Virtual environments
+# =============================================================================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# =============================================================================
+# Generated data — never commit sample data to the repo
+# Raw files produced by scripts/generate_sample_data.py land here
+# =============================================================================
 /tmp/
 *.csv
 *.json
 *.parquet
+*.avro
+*.orc
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-.eggs/
-.pytest_cache/
-
-# Spark / Delta
+# =============================================================================
+# Spark / Delta Lake local artifacts
+# These are created when running PySpark locally outside Databricks
+# =============================================================================
 derby.log
 metastore_db/
 spark-warehouse/
+checkpoint/
+_delta_log/
 
-# Environment files
-.env
-*.env
+# =============================================================================
+# Test artifacts
+# =============================================================================
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.junit.xml
+.tox/
 
-# OS / editor files
+# =============================================================================
+# IDE and OS
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
+desktop.ini
+
+# =============================================================================
+# Jupyter notebooks (outputs only — .ipynb source files ARE tracked)
+# Strip cell outputs so diffs stay clean; outputs regenerate on re-run
+# =============================================================================
+.ipynb_checkpoints/
+
+# =============================================================================
+# Secrets — never commit credentials or secret scope values
+# =============================================================================
+*.env
+.env.*
+secrets.yml
+credentials.json
+service_account.json

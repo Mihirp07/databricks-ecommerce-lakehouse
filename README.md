@@ -103,7 +103,11 @@ databricks-ecommerce-lakehouse/
 │   │   └── gold_revenue_summary.py ← Daily/monthly KPIs + channel breakdown
 │   └── quality/
 │       └── expectations.py       ← DQ expectation framework
-├── notebooks/                    ← Databricks notebooks (coming soon)
+├── notebooks/
+│   ├── 00_setup_and_data_generation.py       ← Bootstrap env + generate raw data
+│   ├── 01_bronze_ingestion_demo.py           ← Batch + streaming ingestion walkthrough
+│   ├── 02_silver_transformation_and_dq_demo.py ← Typing, dedup, DQ, quarantine
+│   └── 03_gold_revenue_insights_demo.py      ← Revenue KPIs + business insights
 ├── jobs/
 │   └── full_pipeline_job.yml     ← Databricks Workflows job definition
 ├── tests/
@@ -166,11 +170,14 @@ pytest tests/ -v
 
 ### 5. On Databricks (Community Edition)
 
-1. Upload the repo to Databricks Repos
+1. Upload the repo to Databricks Repos (`Repos → Add Repo → paste your GitHub URL`)
 2. Set `ENV_NAME=dev` as a cluster environment variable
-3. Run `scripts/generate_sample_data.py` to populate the raw landing zone
-4. Run each pipeline module in order: Bronze → Silver → Gold (see step 3 above)
-5. To deploy as a scheduled job: import `jobs/full_pipeline_job.yml` via the Workflows UI
+3. Open and run the notebooks in order:
+   - `notebooks/00_setup_and_data_generation.py` — generates raw data
+   - `notebooks/01_bronze_ingestion_demo.py` — ingests into Bronze Delta tables
+   - `notebooks/02_silver_transformation_and_dq_demo.py` — cleans, validates, writes Silver
+   - `notebooks/03_gold_revenue_insights_demo.py` — builds Gold KPIs and business insights
+4. To deploy as a scheduled job: import `jobs/full_pipeline_job.yml` via the Workflows UI
 
 ---
 
@@ -293,7 +300,19 @@ Built to demonstrate skills assessed by the **Databricks Certified Data Engineer
 - Workflow orchestration with task dependencies and failure handling
 
 ---
+## Project Retrospective
 
+This project was built to demonstrate production-style data engineering patterns using Databricks, Apache Spark, and Delta Lake.
+
+Key challenges addressed:
+
+- Designed a Medallion Architecture to separate raw ingestion, validated transformation, and business-ready analytics layers.
+- Implemented a quarantine pattern to prevent invalid records from reaching downstream Silver and Gold tables.
+- Simulated cloud-native S3/ADLS paths while keeping the project runnable without paid cloud infrastructure.
+- Used Delta Lake features such as MERGE, schema enforcement, OPTIMIZE, Z-ORDER, and time travel to model real-world pipeline reliability and performance.
+- Structured the project with modular Python code, Databricks notebook demos, workflow definitions, tests, and documentation to make it recruiter and reviewer friendly.
+
+This project represents Version 1.0 of a production-style e-commerce Lakehouse pipeline and can be extended with customer 360 analytics, product performance metrics, and real cloud deployment.
 ## License
 
 MIT
