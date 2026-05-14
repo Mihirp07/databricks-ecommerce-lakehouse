@@ -1,0 +1,149 @@
+# jobs/full_pipeline_job.yml
+# ----------------------------
+# Databricks Workflows job definition.
+# Deploy with: databricks jobs create --json @jobs/full_pipeline_job.yml
+# Or import via the Databricks UI: Workflows → Create Job → paste JSON equivalent.
+#
+# Pipeline DAG:
+#
+#   [bronze_orders] ──────────────────────────────────────────┐
+#   [bronze_products]                                          ├→ [silver_orders] ──┐
+#   [bronze_customers]                                         │                    ├→ [gold_revenue]
+#   [bronze_events_stream] ────────────────────────────────────┘                    ├→ [gold_customer_360]
+#                                                              [silver_events] ─────┘
+#   [dq_report] runs after all silver tasks complete (fan-in)
+
+name: ecommerce-lakehouse-full-pipeline
+
+# Cluster shared across all tasks (job cluster = spun up fresh each run)
+job_clusters:
+  - job_cluster_key: pipeline-cluster
+    new_cluster:
+      spark_version: 14.3.x-scala2.12
+      node_type_id: i3.xlarge          # 30.5 GB, 4 cores — adjust for your tier
+      num_workers: 2
+      spark_conf:
+        spark.databricks.delta.preview.enabled: "true"
+        spark.sql.adaptive.enabled: "true"
+        spark.databricks.delta.optimizeWrite.enabled: "true"
+      # In production: attach IAM instance profile for S3 access
+      # aws_attributes:
+      #   instance_profile_arn: arn:aws:iam::123456789:instance-profile/databricks-s3-profile
+      custom_tags:
+        Project: ecommerce-lakehouse
+        Team: data-engineering
+        Environment: dev
+
+# Environment variable passed to all tasks
+parameters:
+  - name: env
+    default: dev
+
+tasks:
+
+  # ── Bronze ingestion ────────────────────────────────────────────────────────
+
+  - task_key: bronze_orders
+    job_cluster_key: pipeline-cluster
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: bronze_orders
+      parameters: ["--env", "{{job.parameters.env}}"]
+    libraries:
+      - pypi: {package: pyyaml}
+      - pypi: {package: delta-spark==3.1.0}
+
+  - task_key: bronze_products
+    job_cluster_key: pipeline-cluster
+    depends_on: []
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: bronze_products
+      parameters: ["--env", "{{job.parameters.env}}"]
+
+  - task_key: bronze_customers
+    job_cluster_key: pipeline-cluster
+    depends_on: []
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: bronze_customers
+      parameters: ["--env", "{{job.parameters.env}}"]
+
+  - task_key: bronze_events_stream
+    job_cluster_key: pipeline-cluster
+    depends_on: []
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: bronze_events_stream
+      parameters: ["--env", "{{job.parameters.env}}", "--trigger-once", "true"]
+
+  # ── Silver transformation ────────────────────────────────────────────────────
+
+  - task_key: silver_orders
+    job_cluster_key: pipeline-cluster
+    depends_on:
+      - task_key: bronze_orders
+      - task_key: bronze_customers
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: silver_orders
+      parameters: ["--env", "{{job.parameters.env}}"]
+
+  - task_key: silver_events
+    job_cluster_key: pipeline-cluster
+    depends_on:
+      - task_key: bronze_events_stream
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: silver_events
+      parameters: ["--env", "{{job.parameters.env}}"]
+
+  # ── Data quality report ──────────────────────────────────────────────────────
+
+  - task_key: dq_report
+    job_cluster_key: pipeline-cluster
+    depends_on:
+      - task_key: silver_orders
+      - task_key: silver_events
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: dq_runner
+      parameters: ["--env", "{{job.parameters.env}}", "--fail-on-error", "true"]
+    # If DQ fails, downstream Gold tasks are skipped automatically (Databricks behaviour)
+
+  # ── Gold aggregations ────────────────────────────────────────────────────────
+
+  - task_key: gold_revenue_summary
+    job_cluster_key: pipeline-cluster
+    depends_on:
+      - task_key: dq_report
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: gold_revenue_summary
+      parameters: ["--env", "{{job.parameters.env}}"]
+
+  - task_key: gold_customer_360
+    job_cluster_key: pipeline-cluster
+    depends_on:
+      - task_key: dq_report
+    python_wheel_task:
+      package_name: ecommerce_lakehouse
+      entry_point: gold_customer_360
+      parameters: ["--env", "{{job.parameters.env}}"]
+
+# ── Schedule ─────────────────────────────────────────────────────────────────
+# Runs daily at 02:00 UTC
+schedule:
+  quartz_cron_expression: "0 0 2 * * ?"
+  timezone_id: UTC
+  pause_status: UNPAUSED
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+email_notifications:
+  on_failure:
+    - data-engineering@yourcompany.com
+  no_alert_for_skipped_runs: true
+
+# ── Timeout & retry ───────────────────────────────────────────────────────────
+timeout_seconds: 7200   # 2 hours max
+max_concurrent_runs: 1  # prevent overlapping runs
